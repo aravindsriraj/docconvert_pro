@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Converter Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/marked/marked.min.js">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .markdown-content {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .markdown-content h1 { font-size: 2em; font-weight: bold; margin: 1em 0; }
+        .markdown-content h2 { font-size: 1.5em; font-weight: bold; margin: 0.8em 0; }
+        .markdown-content h3 { font-size: 1.2em; font-weight: bold; margin: 0.6em 0; }
+        .markdown-content p { margin: 1em 0; }
+        .markdown-content ul { list-style-type: disc; margin-left: 2em; }
+        .markdown-content ol { list-style-type: decimal; margin-left: 2em; }
+        .markdown-content table { border-collapse: collapse; width: 100%; }
+        .markdown-content th, .markdown-content td { border: 1px solid #ddd; padding: 8px; }
+        .markdown-content code { background-color: #f5f5f5; padding: 2px 4px; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8">Document Converter Pro</h1>
+        
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- URL Input Section -->
+                <div class="border-r md:pr-6">
+                    <h2 class="text-xl font-semibold mb-4">Convert from URL</h2>
+                    <form id="urlForm" class="space-y-4">
+                        <input type="url" id="urlInput" placeholder="Enter PDF URL" 
+                               class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="submit" 
+                                class="w-full bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
+                            Convert URL
+                        </button>
+                    </form>
+                </div>
+
+                <!-- File Upload Section -->
+                <div class="md:pl-6">
+                    <h2 class="text-xl font-semibold mb-4">Upload PDF File</h2>
+                    <form id="fileForm" class="space-y-4">
+                        <input type="file" id="fileInput" accept=".pdf" 
+                               class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="submit" 
+                                class="w-full bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition">
+                            Convert File
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" class="bg-white rounded-lg shadow-lg p-6 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Converted Content</h2>
+                <div class="space-x-2">
+                    <button onclick="copyMarkdown()" 
+                            class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition">
+                        Copy Markdown
+                    </button>
+                    <button onclick="downloadMarkdown()" 
+                            class="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition">
+                        Download .md
+                    </button>
+                </div>
+            </div>
+            <div id="markdownContent" class="markdown-content prose max-w-none p-4 border rounded-lg"></div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <div class="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
+        </div>
+    </div>
+
+    <script>
+        let markdownText = '';
+
+        function showLoading() {
+            document.getElementById('loading').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
+        }
+
+        function showResults(markdown) {
+            markdownText = markdown;
+            const resultsDiv = document.getElementById('results');
+            const contentDiv = document.getElementById('markdownContent');
+            resultsDiv.classList.remove('hidden');
+            contentDiv.innerHTML = marked.parse(markdown);
+        }
+
+        async function copyMarkdown() {
+            try {
+                await navigator.clipboard.writeText(markdownText);
+                alert('Markdown copied to clipboard!');
+            } catch (err) {
+                alert('Failed to copy markdown: ' + err);
+            }
+        }
+
+        async function downloadMarkdown() {
+            try {
+                const response = await fetch(`/download-markdown?content=${encodeURIComponent(markdownText)}`);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'converted_document.md';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (err) {
+                alert('Failed to download markdown: ' + err);
+            }
+        }
+
+        document.getElementById('urlForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('urlInput').value;
+            if (!url) return;
+
+            showLoading();
+            try {
+                const formData = new FormData();
+                formData.append('url', url);
+                const response = await fetch('/convert-url', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    showResults(data.markdown);
+                }
+            } catch (err) {
+                alert('Error: ' + err);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        document.getElementById('fileForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files[0]) return;
+
+            showLoading();
+            try {
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                const response = await fetch('/convert-file', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    showResults(data.markdown);
+                }
+            } catch (err) {
+                alert('Error: ' + err);
+            } finally {
+                hideLoading();
+            }
+        });
+    </script>
+</body>
+</html>
